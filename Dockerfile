@@ -10,12 +10,20 @@ curl ca-certificates build-essential pkg-config \
 
 # The emulator needs NIGHTLY Rust (for -Zbuild-std); install it via rustup
 RUN rustup toolchain install nightly && rustup default nightly
+RUN rustup component add rust-src --toolchain nightly
 RUN rustup target add wasm32-unknown-unknown
 RUN cargo install wasm-pack
 
 # Node.js for the webpack build
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+
+ENV BUILD_MODE=production
+
+RUN cd frontend/web && npm install && npm run build
 
 ########## Stage 2 — serve ##########
 FROM nginx:stable-alpine
