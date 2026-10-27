@@ -1,32 +1,21 @@
 # syntax=docker/dockerfile:1
 
 ########## Stage 1 — build the WASM + web bundle ##########
-FROM rust:nightly-slim-bookworm AS build
+FROM rust:slim-bookworm AS build
 
-RUN apt-get update \
-&& apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+# Tools needed to compile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+curl ca-certificates build-essential pkg-config \
 && rm -rf /var/lib/apt/lists/*
 
-# Node 20 — webpack + @wasm-tool/wasm-pack-plugin
+# The emulator needs NIGHTLY Rust (for -Zbuild-std); install it via rustup
+RUN rustup toolchain install nightly && rustup default nightly
+RUN rustup target add wasm32-unknown-unknown
+RUN cargo install wasm-pack
+
+# Node.js for the webpack build
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-&& apt-get install -y --no-install-recommends nodejs \
-&& rm -rf /var/lib/apt/lists/*
-
-# wasm32 target + rust-src (required by -Zbuild-std) + pinned wasm-pack
-RUN rustup target add wasm32-unknown-unknown \
-&& rustup component add rust-src \
-&& curl -fsSL -o /tmp/wp.tar.gz \
-https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
-&& tar -xzf /tmp/wp.tar.gz -C /tmp \
-&& mv /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/ \
-&& rm -rf /tmp/wp.tar.gz /tmp/wasm-pack-*
-
-WORKDIR /app
-COPY . .
-
-# webpack reads BUILD_MODE; without this you ship an unminified dev build
-ENV BUILD_MODE=production
-RUN cd frontend/web && npm install && npm run build
+&& apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 
 ########## Stage 2 — serve ##########
 FROM nginx:stable-alpine
